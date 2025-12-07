@@ -8,6 +8,7 @@ import (
 	"github.com/tejassathe/Nexus-ProtocolNetwork/pkg/config"
 	"github.com/tejassathe/Nexus-ProtocolNetwork/pkg/events"
 	"github.com/tejassathe/Nexus-ProtocolNetwork/pkg/logger"
+	"github.com/tejassathe/Nexus-ProtocolNetwork/pkg/realtime"
 )
 
 type App struct {
@@ -18,7 +19,11 @@ type App struct {
 }
 
 func NewApp(cfg config.Config, log logger.Logger, eventSvc events.Service) *App {
-	router := NewRouter(log, eventSvc)
+	wsHub := realtime.NewWSHub()
+	sseBroker := realtime.NewSSEBroker()
+	rtBroadcaster := realtime.NewBroadcaster(log, wsHub, sseBroker)
+
+	router := NewRouter(log, eventSvc, wsHub, sseBroker, rtBroadcaster)
 
 	srv := &http.Server{
 		Addr:         cfg.ListenAddr,

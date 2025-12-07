@@ -2,21 +2,25 @@ package gateway
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 
 	"github.com/tejassathe/Nexus-ProtocolNetwork/pkg/events"
 	"github.com/tejassathe/Nexus-ProtocolNetwork/pkg/logger"
+	"github.com/tejassathe/Nexus-ProtocolNetwork/pkg/realtime"
 )
 
 type EventHandler struct {
-	log      logger.Logger
-	eventSvc events.Service
+	log           logger.Logger
+	eventSvc      events.Service
+	rtBroadcaster realtime.Broadcaster
 }
 
-func NewEventHandler(log logger.Logger, es events.Service) *EventHandler {
+func NewEventHandler(log logger.Logger, es events.Service, rt realtime.Broadcaster) *EventHandler {
 	return &EventHandler{
-		log:      log,
-		eventSvc: es,
+		log:           log,
+		eventSvc:      es,
+		rtBroadcaster: rt,
 	}
 }
 
@@ -55,7 +59,6 @@ func (h *EventHandler) HandleRESTIngest(w http.ResponseWriter, r *http.Request) 
 		Metadata: reqBody.Metadata,
 		Source:   src,
 	})
-
 	if err != nil {
 		if err == events.ErrMissingType {
 			http.Error(w, err.Error(), http.StatusBadRequest)
@@ -64,6 +67,11 @@ func (h *EventHandler) HandleRESTIngest(w http.ResponseWriter, r *http.Request) 
 		h.log.Error("failed to ingest event", "err", err)
 		http.Error(w, "failed to ingest event", http.StatusInternalServerError)
 		return
+	}
+
+	channel := DefaultTenantChannel(tenantID)
+	if err := h.rtBroadcaster.BroadcastEvent(ctx, channel, env); err != nil {
+		h.log.Warn("failed to broadcast event", "err", err, "channel", channel)
 	}
 
 	resp := restIngestResponse{
@@ -77,4 +85,8 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(v)
+}
+
+func DefaultTenantChannel(tenantID string) string {
+	return fmt.Sprintf("tenant:%s:events", tenantID)
 }
