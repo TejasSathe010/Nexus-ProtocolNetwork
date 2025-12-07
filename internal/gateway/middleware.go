@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	ctl "github.com/tejassathe/Nexus-ProtocolNetwork/pkg/control"
 	"github.com/tejassathe/Nexus-ProtocolNetwork/pkg/logger"
 )
 
@@ -52,10 +53,7 @@ func LoggingMiddleware(log logger.Logger) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			start := time.Now()
-
-			// WRAP RESPONSEWRITER
 			wrapped := &statusRecorder{ResponseWriter: w, statusCode: http.StatusOK}
-
 			next.ServeHTTP(wrapped, r)
 
 			reqID, _ := r.Context().Value(ContextKeyRequestID).(string)
@@ -84,7 +82,7 @@ func (s *statusRecorder) Hijack() (net.Conn, *bufio.ReadWriter, error) {
 	if h, ok := s.ResponseWriter.(http.Hijacker); ok {
 		return h.Hijack()
 	}
-	return nil, nil, fmt.Errorf("statusRecorder: underlying ResponseWriter does not implement http.Hijacker")
+	return nil, nil, fmt.Errorf("http.Hijacker not supported")
 }
 
 func (s *statusRecorder) Flush() {
@@ -93,20 +91,42 @@ func (s *statusRecorder) Flush() {
 	}
 }
 
-var _ http.Flusher = (*statusRecorder)(nil)
+func (s *statusRecorder) Push(target string, opts *http.PushOptions) error {
+	if p, ok := s.ResponseWriter.(http.Pusher); ok {
+		return p.Push(target, opts)
+	}
+	return http.ErrNotSupported
+}
 
-func AuthMiddleware(log logger.Logger) func(http.Handler) http.Handler {
+func AuthMiddleware(log logger.Logger, store *ctl.Store) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			tenantID := r.Header.Get("X-Tenant-Id")
+			headerTenant := r.Header.Get("X-Tenant-Id")
 			apiKey := r.Header.Get("X-Api-Key")
 
-			if tenantID == "" || apiKey == "" {
-				http.Error(w, "missing X-Tenant-Id or X-Api-Key", http.StatusUnauthorized)
+			if apiKey == "" {
+				http.Error(w, "missing X-Api-Key", http.StatusUnauthorized)
 				return
 			}
 
-			ctx := context.WithValue(r.Context(), ContextKeyTenantID, tenantID)
+			ctx := r.Context()
+			tenant, _, err := store.GetTenantByAPIKey(ctx, apiKey)
+			if err != nil {
+				log.Error("auth lookup failed", "err", err)
+				http.Error(w, "auth error", http.StatusInternalServerError)
+				return
+			}
+			if tenant == nil {
+				http.Error(w, "invalid api key", http.StatusUnauthorized)
+				return
+			}
+
+			if headerTenant != "" && headerTenant != tenant.ID {
+				http.Error(w, "tenant mismatch", http.StatusForbidden)
+				return
+			}
+
+			ctx = context.WithValue(ctx, ContextKeyTenantID, tenant.ID)
 			ctx = context.WithValue(ctx, ContextKeyAPIKey, apiKey)
 
 			next.ServeHTTP(w, r.WithContext(ctx))

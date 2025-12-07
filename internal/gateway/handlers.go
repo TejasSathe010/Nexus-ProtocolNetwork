@@ -1,6 +1,7 @@
 package gateway
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -8,19 +9,27 @@ import (
 	"github.com/tejassathe/Nexus-ProtocolNetwork/pkg/events"
 	"github.com/tejassathe/Nexus-ProtocolNetwork/pkg/logger"
 	"github.com/tejassathe/Nexus-ProtocolNetwork/pkg/realtime"
+	"github.com/tejassathe/Nexus-ProtocolNetwork/pkg/routing"
 )
 
 type EventHandler struct {
 	log           logger.Logger
 	eventSvc      events.Service
 	rtBroadcaster realtime.Broadcaster
+	router        *routing.Engine
 }
 
-func NewEventHandler(log logger.Logger, es events.Service, rt realtime.Broadcaster) *EventHandler {
+func NewEventHandler(
+	log logger.Logger,
+	es events.Service,
+	rt realtime.Broadcaster,
+	router *routing.Engine,
+) *EventHandler {
 	return &EventHandler{
 		log:           log,
 		eventSvc:      es,
 		rtBroadcaster: rt,
+		router:        router,
 	}
 }
 
@@ -69,9 +78,23 @@ func (h *EventHandler) HandleRESTIngest(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	channel := DefaultTenantChannel(tenantID)
-	if err := h.rtBroadcaster.BroadcastEvent(ctx, channel, env); err != nil {
-		h.log.Warn("failed to broadcast event", "err", err, "channel", channel)
+	channels, err := h.resolveChannels(ctx, tenantID, env.Type)
+	if err != nil {
+		h.log.Warn("resolve channels failed; using default", "err", err)
+	}
+
+	if len(channels) == 0 {
+		channels = []string{DefaultTenantChannel(tenantID)}
+	}
+
+	for _, ch := range channels {
+		if err := h.rtBroadcaster.BroadcastEvent(ctx, ch, env); err != nil {
+			h.log.Warn("failed to broadcast event",
+				"err", err,
+				"channel", ch,
+				"event_id", env.ID,
+			)
+		}
 	}
 
 	resp := restIngestResponse{
@@ -89,4 +112,11 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 
 func DefaultTenantChannel(tenantID string) string {
 	return fmt.Sprintf("tenant:%s:events", tenantID)
+}
+
+func (h *EventHandler) resolveChannels(ctx context.Context, tenantID, eventType string) ([]string, error) {
+	if h.router == nil {
+		return nil, nil
+	}
+	return h.router.ResolveChannels(ctx, tenantID, eventType)
 }

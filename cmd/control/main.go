@@ -7,12 +7,10 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/tejassathe/Nexus-ProtocolNetwork/internal/gateway"
+	"github.com/tejassathe/Nexus-ProtocolNetwork/internal/control"
 	"github.com/tejassathe/Nexus-ProtocolNetwork/pkg/config"
-	"github.com/tejassathe/Nexus-ProtocolNetwork/pkg/control"
-	"github.com/tejassathe/Nexus-ProtocolNetwork/pkg/events"
+	ctl "github.com/tejassathe/Nexus-ProtocolNetwork/pkg/control"
 	"github.com/tejassathe/Nexus-ProtocolNetwork/pkg/logger"
-	"github.com/tejassathe/Nexus-ProtocolNetwork/pkg/routing"
 	"github.com/tejassathe/Nexus-ProtocolNetwork/pkg/store"
 )
 
@@ -30,29 +28,20 @@ func main() {
 		os.Exit(1)
 	}
 
-	ctrlStore := control.NewStore(db)
-	routerEngine := routing.NewEngine(ctrlStore)
+	ctrlStore := ctl.NewStore(db)
 
-	logr.Info("starting nexus gateway",
-		"listen_addr", cfg.ListenAddr,
-		"env", cfg.Env,
-		"db", cfg.DBDSN,
-	)
-
-	eventService := events.NewLogService(logr)
-
-	app := gateway.NewApp(cfg, logr, eventService, ctrlStore, routerEngine)
+	app := control.NewApp(cfg, logr, ctrlStore)
 
 	if err := run(app, logr); err != nil {
-		logr.Error("gateway exited with error", "err", err)
+		logr.Error("control service exited with error", "err", err)
 		os.Exit(1)
 	}
 }
 
-func run(app *gateway.App, logr logger.Logger) error {
+func run(app *control.App, logr logger.Logger) error {
 	go func() {
 		if err := app.Start(); err != nil {
-			logr.Error("http server error", "err", err)
+			logr.Error("control http server error", "err", err)
 		}
 	}()
 
@@ -60,7 +49,7 @@ func run(app *gateway.App, logr logger.Logger) error {
 	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM)
 	<-stop
 
-	logr.Info("shutting down gateway")
+	logr.Info("shutting down control service")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()

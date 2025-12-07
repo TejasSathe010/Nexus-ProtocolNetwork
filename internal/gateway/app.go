@@ -6,9 +6,11 @@ import (
 	"time"
 
 	"github.com/tejassathe/Nexus-ProtocolNetwork/pkg/config"
+	"github.com/tejassathe/Nexus-ProtocolNetwork/pkg/control"
 	"github.com/tejassathe/Nexus-ProtocolNetwork/pkg/events"
 	"github.com/tejassathe/Nexus-ProtocolNetwork/pkg/logger"
 	"github.com/tejassathe/Nexus-ProtocolNetwork/pkg/realtime"
+	"github.com/tejassathe/Nexus-ProtocolNetwork/pkg/routing"
 )
 
 type App struct {
@@ -18,12 +20,18 @@ type App struct {
 	httpServer *http.Server
 }
 
-func NewApp(cfg config.Config, log logger.Logger, eventSvc events.Service) *App {
+func NewApp(
+	cfg config.Config,
+	log logger.Logger,
+	eventSvc events.Service,
+	ctrlStore *control.Store,
+	routerEngine *routing.Engine,
+) *App {
 	wsHub := realtime.NewWSHub()
 	sseBroker := realtime.NewSSEBroker()
 	rtBroadcaster := realtime.NewBroadcaster(log, wsHub, sseBroker)
 
-	router := NewRouter(log, eventSvc, wsHub, sseBroker, rtBroadcaster)
+	router := NewRouter(log, eventSvc, ctrlStore, routerEngine, wsHub, sseBroker, rtBroadcaster)
 
 	srv := &http.Server{
 		Addr:         cfg.ListenAddr,

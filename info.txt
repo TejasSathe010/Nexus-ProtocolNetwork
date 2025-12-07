@@ -1,0 +1,7 @@
+{"id":"cfa85a76-5908-4285-8ccb-aec2419c6551","name":"Acme Corp","created_at":"2025-12-07T17:27:01Z"}
+
+{"id":"82dcd572-9fb6-475e-91f4-1207ab07b394","secret":"sk_93ce18ca-fa18-42ba-a65d-6bc08b1678dc","label":"default-server-key","created_at":"2025-12-07T17:27:30Z"}
+
+{"id":"e8d02fcb-e8dd-4f7e-9544-d0f9290aa0f5","match_type":"PREFIX","match_value":"invoice.","target_channel":"tenant:cfa85a76-5908-4285-8ccb-aec2419c6551:billing","created_at":"2025-12-07T17:29:00Z"}
+
+{"channel":"tenant:cfa85a76-5908-4285-8ccb-aec2419c6551:billing","event":{"id":"1c5e0fac-ad7a-4988-86cb-022b1698e86a","tenant_id":"cfa85a76-5908-4285-8ccb-aec2419c6551","type":"invoice.payment_succeeded","source":{"protocol":"REST","endpoint":"/api/v1/events","ip":"[::1]:60599","user_agent":"curl/8.7.1"},"data":{"amount":5000,"invoice_id":"inv_123"},"metadata":{"source_app":"billing-service"},"status":{"ingested_at":"2025-12-07T17:30:36.158303Z","delivery_state":"PENDING"}}}

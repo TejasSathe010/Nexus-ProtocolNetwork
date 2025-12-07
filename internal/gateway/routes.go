@@ -4,14 +4,18 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
+	ctl "github.com/tejassathe/Nexus-ProtocolNetwork/pkg/control"
 	"github.com/tejassathe/Nexus-ProtocolNetwork/pkg/events"
 	"github.com/tejassathe/Nexus-ProtocolNetwork/pkg/logger"
 	"github.com/tejassathe/Nexus-ProtocolNetwork/pkg/realtime"
+	"github.com/tejassathe/Nexus-ProtocolNetwork/pkg/routing"
 )
 
 func NewRouter(
 	log logger.Logger,
 	eventSvc events.Service,
+	ctrlStore *ctl.Store,
+	routerEngine *routing.Engine,
 	wsHub *realtime.WSHub,
 	sseBroker *realtime.SSEBroker,
 	rtBroadcaster realtime.Broadcaster,
@@ -21,7 +25,7 @@ func NewRouter(
 	r.Use(RequestIDMiddleware)
 	r.Use(RecoverMiddleware(log))
 	r.Use(LoggingMiddleware(log))
-	r.Use(AuthMiddleware(log))
+	r.Use(AuthMiddleware(log, ctrlStore))
 
 	r.Group(func(r chi.Router) {
 		r.Use()
@@ -32,7 +36,7 @@ func NewRouter(
 	})
 
 	r.Route("/api/v1", func(api chi.Router) {
-		h := NewEventHandler(log, eventSvc, rtBroadcaster)
+		h := NewEventHandler(log, eventSvc, rtBroadcaster, routerEngine)
 		api.Post("/events", h.HandleRESTIngest)
 	})
 
